@@ -7,9 +7,9 @@ export default defineConfig({
   build: {
     rollupOptions: {
       input: {
-        popup: resolve(__dirname, 'index.html'),
-        content: resolve(__dirname, 'src/content/index.js'),
-        background: resolve(__dirname, 'src/background/index.js')
+        popup: resolve(import.meta.dirname, 'index.html'),
+        content: resolve(import.meta.dirname, 'src/content/index.js'),
+        background: resolve(import.meta.dirname, 'src/background/index.js')
       },
       output: {
         // 强制固定文件名，方便 content.js 引用

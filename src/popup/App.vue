@@ -358,13 +358,23 @@ dayjs.extend(utc);
 dayjs.extend(timezonePlugin);
 
 // --- 响应式状态管理 ---
+const readStoredArray = (key) => {
+  try {
+    const value = JSON.parse(localStorage.getItem(key) || '[]');
+    return Array.isArray(value) ? value : [];
+  } catch {
+    localStorage.removeItem(key);
+    return [];
+  }
+};
+
 const step = ref('loading');
 const loadingTip = ref('载入中...');
 const token = ref('');
 const inputToken = ref('');
 const pageList = ref([]); // All available pages
 const selectedId = ref(localStorage.getItem('LAST_PAGE_ID')); // For single mode
-const selectedIds = ref(JSON.parse(localStorage.getItem('MULTI_PAGE_IDS') || '[]'));
+const selectedIds = ref(readStoredArray('MULTI_PAGE_IDS'));
 const isMultiMode = ref(localStorage.getItem('IS_MULTI_MODE') === 'true');
 const isDarkMode = ref(localStorage.getItem('THEME_MODE') === 'dark');
 const timezone = ref(localStorage.getItem('PREF_TZ') || 'local');
@@ -398,6 +408,12 @@ const getCookie = (name) => {
   return null;
 };
 
+const buildApiUrl = (path, params = {}) => {
+  const url = new URL(path, 'https://botcake.io');
+  Object.entries(params).forEach(([key, value]) => url.searchParams.set(key, String(value)));
+  return url.toString();
+};
+
 // --- API 请求核心逻辑 ---
 const fetchAllPages = async (pageId, userToken, filters) => {
   const fdBase = new FormData();
@@ -405,7 +421,12 @@ const fetchAllPages = async (pageId, userToken, filters) => {
     Object.keys(f).forEach(key => fdBase.append(`filter[${idx}][${key}]`, f[key]));
   });
 
-  const getUrl = (p) => `https://botcake.io/api/v1/pages/${pageId}/customers?page_size=100&page=${p}&access_token=${userToken}`;
+  const safePageId = encodeURIComponent(String(pageId));
+  const getUrl = (p) => buildApiUrl(`/api/v1/pages/${safePageId}/customers`, {
+    page_size: 100,
+    page: p,
+    access_token: userToken
+  });
   
   const firstRes = await fetch(getUrl(1), { method: 'POST', body: fdBase });
   if (firstRes.status === 500) throw new Error("Botcake后端压力过大，请稍后刷新。");
@@ -766,11 +787,15 @@ const init = async () => {
   if (!activeToken) { step.value = 'login'; return; }
   token.value = activeToken;
   try {
-    const res = await fetch(`https://botcake.io/api/v1/pages?access_token=${activeToken}`);
+    const res = await fetch(buildApiUrl('/api/v1/pages', { access_token: activeToken }));
+    if (!res.ok) throw new Error(`请求失败: ${res.status}`);
     const data = await res.json();
     const list = data.categorized?.activated || data.pages || [];
     if (list.length > 0) {
-      pageList.value = list.map(p => ({ ...p, avatar: `https://pages.fm/api/v1/pages/${p.id}/botcake/avatar` }));
+      pageList.value = list.map(p => ({
+        ...p,
+        avatar: `https://pages.fm/api/v1/pages/${encodeURIComponent(String(p.id))}/botcake/avatar`
+      }));
       if (!selectedId.value) selectedId.value = list[0].id;
       step.value = 'dashboard';
       fetchData(); 
@@ -784,22 +809,27 @@ const init = async () => {
 };
 
 const handleAutoSync = () => { 
-  if (getCookie('token_jwt') || localStorage.getItem('BOTCAKE_TOKEN')) {
-    localStorage.setItem('BOTCAKE_TOKEN', getCookie('token_jwt'));
-    init()
+  const cookieToken = getCookie('token_jwt');
+  const savedToken = localStorage.getItem('BOTCAKE_TOKEN');
+  if (cookieToken || savedToken) {
+    if (cookieToken) localStorage.setItem('BOTCAKE_TOKEN', cookieToken);
+    init();
   } else message.error("未找到有效的浏览器 Cookie 凭证"); 
 };
 
 const saveManualToken = () => { 
-  if(inputToken.value) { 
-    localStorage.setItem('BOTCAKE_TOKEN', inputToken.value); 
+  const manualToken = inputToken.value.trim();
+  if (manualToken) {
+    localStorage.setItem('BOTCAKE_TOKEN', manualToken);
     init(); 
   } 
 };
 
 const handleLogout = () => { 
-  localStorage.clear(); 
-  step.value = 'login'; 
+  localStorage.removeItem('BOTCAKE_TOKEN');
+  token.value = '';
+  inputToken.value = '';
+  step.value = 'login';
 };
 
 const handlePageSwitch = ({ key }) => { 

@@ -2,8 +2,6 @@
   "manifest_version": 3,
   "name": "Botcake 数据助手",
   "version": "1.0.0",
-  "permissions": ["storage", "tabs", "webNavigation"],
-  "host_permissions": ["https://botcake.io/*"],
   "action": {
     "default_title": "打开 Botcake 看板"
   },
@@ -20,7 +18,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["assets/*"],
+      "resources": ["assets/popup.js", "assets/popup.css"],
       "matches": ["https://botcake.io/*"]
     }
   ]
